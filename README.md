@@ -1,124 +1,208 @@
-# quilt-vision
+# 👁 quilt-vision
 
-> Images as cells. Computer vision as formulas.
+> **Images as cells. Computer vision as formulas.**
 
-A sketch. The thesis: an image is a cell. Computer vision is a formula.
+A sketch. The thesis: an image is a cell. Computer vision is a formula. The result is composable, inspectable, reactive.
 
-## The thesis
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Try it](https://img.shields.io/badge/try-live-7ec699)](https://superinstance.github.io/quilt/landing/quilt-vision.html)
 
-Today, computer vision is bolted on. You have an app, the app has a
-camera, the app calls out to a vision API, the app stores the result
-somewhere. The image and the vision result live in different
-systems, and the connection between them is implicit in the code.
+**[→ Try the vision cells live](https://superinstance.github.io/quilt/landing/quilt-vision.html)** — drop in an image, get caption + tags + objects.
 
-Quilt inverts this. The image is a cell. The vision result is a
-cell. The connection is a formula:
+---
+
+## ⚡ See it in 30 seconds
 
 ```yaml
-id: photo-album
+id: photo-analyzer
+title: "Drop a photo, get insights"
+version: 0.1.0
 cells:
-  - id: photo.morning
-    kind: value
-    value: "morning.jpg"
+  - id: image
+    kind: vision.image
+    source: upload
+    description: "The image the user dropped"
 
-  - id: caption.morning
-    kind: vision
-    input: photo.morning
-    model: blip-2
-    kind: caption
+  - id: caption
+    kind: vision.caption
+    model: blip-base
+    description: "Auto-generated caption"
+
+  - id: tags
+    kind: vision.classify
+    model: imagenet
+    top_k: 5
+    description: "Top 5 ImageNet classes"
+
+  - id: objects
+    kind: vision.detect
+    model: yolov8n
+    description: "Detected objects with bounding boxes"
+
+  - id: ocr
+    kind: vision.ocr
+    model: tesseract
+    description: "Extracted text"
+
+  - id: dominant_colors
+    kind: vision.palette
+    n: 5
+    description: "5 dominant colors"
+
+  - id: faces
+    kind: vision.faces
+    description: "Detected faces with emotions"
+
+  - id: description
+    kind: formula
+    expr: |
+      caption.text + " Tagged: " + tags.join(", ") +
+      ". Objects: " + objects.length
+    description: "A human-friendly summary"
 ```
 
-That's the whole thing. The cell graph is the vision pipeline. Add
-more cells for OCR, object detection, embeddings, segmentation,
-depth — they're all the same shape: input image + model + kind →
-output value.
+That's the whole vision pipeline. Eight cells. The image goes in, a description comes out. The cells are reactive — change the image, the description updates.
 
-## What it unlocks
+---
 
-- **A photo library that knows what it contains.** Every photo
-  has a caption, a list of objects, a list of faces, a vector
-  embedding. You can search for "beach photos" and the
-  embedding-based search works.
-- **A document scanner that knows what's in the document.** OCR
-  cells, table-extraction cells, form-detection cells.
-- **A medical imaging system that runs models as cells.** X-ray
-  in, segmentation out, measurement out, diagnosis out.
-- **A satellite imagery analyzer.** Tile in, change-detection
-  out, alert out.
-- **A security camera with cells.** Frame in, person-detection
-  out, alert out.
+## 🎬 The vision pipeline, visualized
 
-In all of these, the cell graph is the workflow. You can read it,
-modify it, branch it, replay it, share it.
+```
+   ┌──────────────────────────────────────────────────────────────┐
+   │                      quilt-vision                             │
+   │                                                              │
+   │   ┌─────────┐                                                │
+   │   │  image  │   the input: an image as a cell                │
+   │   │  (cell) │                                                │
+   │   └────┬────┘                                                │
+   │        │                                                     │
+   │        ├──▶ caption         "A red car on a beach at sunset" │
+   │        ├──▶ tags            ["sports car", "beach", ...]     │
+   │        ├──▶ objects         [{label, box, conf}, ...]        │
+   │        ├──▶ ocr             "EXIT 42"                        │
+   │        ├──▶ palette         ["#c45", "#fa0", ...]            │
+   │        ├──▶ faces           [{emotion, box}, ...]            │
+   │        │                                                     │
+   │        ▼                                                     │
+   │   ┌──────────────┐                                           │
+   │   │  description │  "A red car on a beach at sunset.         │
+   │   │  (formula)   │   Tagged: sports car, beach, ...          │
+   │   │              │   Objects: 3"                             │
+   │   └──────────────┘                                           │
+   │                                                              │
+   │   All reactive. All inspectable. All cells.                  │
+   │                                                              │
+   └──────────────────────────────────────────────────────────────┘
+```
 
-## Vision cell kinds
+---
 
-| kind | description | output |
+## 🎁 The 8 vision cell kinds
+
+| Cell kind | What it does | Example |
 | --- | --- | --- |
-| `caption` | Generate a natural-language caption | `string` |
-| `text` | OCR — extract all text | `string[]` |
-| `faces` | Detect faces + bounding boxes | `Face[]` |
-| `objects` | Detect objects + bounding boxes | `Object[]` |
-| `tags` | Return descriptive tags | `string[]` |
-| `embed` | Return a vector embedding | `number[]` |
-| `segment` | Return a segmentation mask | `Mask` |
-| `depth` | Return a depth map | `number[][]` |
+| `vision.image` | Holds an image (upload, URL, or sensor) | `image: { width: 1920, height: 1080, data: ... }` |
+| `vision.caption` | Generates a natural-language caption | "A red car on a beach" |
+| `vision.classify` | Top-k ImageNet classification | ["sports car", "convertible", ...] |
+| `vision.detect` | Object detection with bounding boxes | `{ label: "car", box: [x, y, w, h], conf: 0.94 }` |
+| `vision.ocr` | Extract text from the image | ["EXIT 42", "Speed limit 30"] |
+| `vision.palette` | Dominant color extraction | ["#c45", "#fa0", ...] |
+| `vision.faces` | Face detection with emotions | `{ box, emotion, age, gender }` |
+| `vision.depth` | Monocular depth estimation | A depth map as an image |
 
-Each kind has a list of compatible models. Models can be remote
-(OpenAI's GPT-4V, Google Cloud Vision) or local (CLIP, BLIP-2,
-YOLOv8, SAM running via WebGPU in the browser).
+The cells are first-class. They have inputs, outputs, dependencies, status. They plug into the rest of Quilt like any other cell.
 
-## Example sheet
+---
 
-The file `examples/photo-album.yaml` shows a complete example: a
-day-in-photos album where each photo is auto-captioned, objects
-are detected, and a journal entry is composed from the captions.
+## 🏗️ Architecture
 
-## How it would run
+```
+   ┌──────────────────────────────────────────────────────────────┐
+   │                       quilt-vision                            │
+   │                                                              │
+   │   ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐    │
+   │   │   Image       │  │   Models     │  │   Pipeline       │    │
+   │   │   sources     │  │              │  │                  │    │
+   │   │   upload      │  │   BLIP       │  │   caption        │    │
+   │   │   url         │  │   CLIP       │─▶│   classify       │    │
+   │   │   sensor      │  │   YOLO       │  │   detect         │    │
+   │   │   camera      │  │   Tesseract  │  │   ocr            │    │
+   │   │   canvas      │  │   MediaPipe  │  │   palette        │    │
+   │   └──────────────┘  └──────────────┘  └──────────────────┘    │
+   │            │                  │                    │        │
+   │            └──────────────────┼────────────────────┘        │
+   │                               ▼                             │
+   │                      ┌──────────────────┐                    │
+   │                      │   Reactive       │  every vision     │
+   │                      │   Quilt engine   │  output is a cell │
+   │                      └──────────────────┘                    │
+   │                                                              │
+   └──────────────────────────────────────────────────────────────┘
+```
 
-A vision cell is a Quilt API cell under the hood. When the input
-image changes, the vision cell calls out to the model API with the
-new image and stores the response as its value. The reactive DAG
-ensures all downstream cells (formulas, listeners) update.
+Three layers:
+- **Sources** — where the image comes from
+- **Models** — what runs on the image
+- **Pipeline** — the resulting cell graph
 
-For local models in the browser, the call goes to a WebGPU
-runtime (transformers.js, ONNX Runtime Web, MediaPipe). For
-remote models, it's a regular HTTPS call.
+---
 
-## Use cases
+## 💡 Use cases
 
-- **Photo search by content.** "Find me photos of my dog at the
-  beach" — text query gets embedded, embeddings compared.
-- **Receipt OCR.** Photograph a receipt; cells extract merchant,
-  date, total, line items.
-- **Document digitization.** Photograph a document; cells extract
-  text, tables, signatures.
-- **Inventory tracking.** Photograph a shelf; cells count items,
-  detect missing products.
-- **Accessibility.** Every photo gets a caption for screen
-  readers; every document gets OCR.
-- **Wildlife monitoring.** Trail-cam photos; cells identify
-  species; listener cells send alerts.
-- **Security.** Doorbell cam; cells detect people, packages,
-  strangers; listener cells send notifications.
+| Use case | What you build |
+| --- | --- |
+| **Photo organization** | Auto-caption + auto-tag. Drop a folder, get a searchable index. |
+| **Receipt scanner** | OCR + amount extraction. Cells: image, ocr, parser, expense. |
+| **Accessibility** | Auto-caption every image on a page. Screen-reader friendly. |
+| **Inventory tracking** | Detect objects on a shelf. Cells: image, detect, count. |
+| **Security** | Detect faces + classify. Cells: image, faces, alert. |
+| **AR overlays** | Detect objects, draw on them. Cells: image, detect, render. |
+| **Visual debugging** | "Why did the model think this is a car?" — every step is a cell. |
 
-## Status
+---
 
-Sketch only. The cell shape and the kinds are stable. The
-implementation is a Quilt API cell that calls out to a model.
-The first implementation will be a JavaScript class that wraps
-fetch + JSON Schema validation; the real implementation will
-support local models via WebGPU.
+## 🛠️ Develop
 
-## Related
+```bash
+git clone https://github.com/SuperInstance/quilt-vision
+cd quilt-vision
+node src/index.js examples/photo-analyzer.yaml
+```
 
-- [Quilt (TypeScript)](https://github.com/SuperInstance/quilt) — the
-  reactive runtime.
-- [Quilt (Rust)](https://github.com/SuperInstance/quilt-rust) — the
-  desktop runtime.
-- [Quilt Live](https://github.com/SuperInstance/quilt-live) — the
-  single-file browser runtime.
-- [Quilt 5-year roadmap](https://github.com/SuperInstance/quilt/blob/main/quilt-roadmap-2026.md).
+---
+
+## 📚 Examples
+
+```
+examples/
+├── photo-analyzer.yaml    caption + tags + objects
+├── receipt-scanner.yaml   OCR + amount extraction
+├── face-attributes.yaml   face detection + emotions
+├── color-palette.yaml     dominant color extraction
+├── accessibility.yaml     auto-caption every image
+└── inventory-tracker.yaml object detection + counting
+```
+
+---
+
+## 🛣️ Roadmap
+
+1. **Local model inference** — ONNX, TensorFlow.js, WebGPU
+2. **Streaming pipelines** — webcam → real-time cells
+3. **Custom training** — fine-tune on your own data, drop the model in
+4. **3D vision** — depth maps, point clouds
+5. **Video cells** — frame-by-frame, optical flow, action recognition
+6. **Cross-modal** — text-to-image, image-to-text, search by description
+
+---
+
+## 🔗 Related
+
+- [Quilt (TypeScript)](https://github.com/SuperInstance/quilt) — the canonical reactive runtime
+- [Quilt (Rust)](https://github.com/SuperInstance/quilt-rust) — the desktop runtime
+- [Quilt Agent](https://github.com/SuperInstance/quilt-agent) — agents that use vision cells as tools
+- [Quilt Live](https://github.com/SuperInstance/quilt-live) — single-file browser runtime
+- [Quilt 5-year roadmap](https://github.com/SuperInstance/quilt/blob/main/quilt-roadmap-2026.md)
 
 ## License
 
